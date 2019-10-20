@@ -40,6 +40,15 @@ func (kl KeepList) Print() {
 	}
 }
 
+func (kl KeepList) ContainsGram(g []byte) int {
+	for idx, gram := range kl.NGrams {
+		if bytes.Compare(gram, g) == 0 {
+			return idx
+		}
+	}
+	return -1
+}
+
 func ParseKeepList(filePath string) (KeepList, error) {
 	var kl KeepList
 

@@ -10,7 +10,8 @@ import (
 
 func PrintUsage(flags []flag.FlagSet) {
 	fmt.Fprintf(os.Stderr, "Usage: %s MODE ARGS\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE\n")
+	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE, DATASET\n")
+	fmt.Fprintf(os.Stderr, "A simple tool for creating malware/goodware datasets from raw byte.\nhttps://github.com/rjzak/gogrammer/\n\n")
 	for _, fset := range flags {
 		fset.Usage()
 	}
@@ -33,8 +34,16 @@ func main() {
 	var listOne = listCompareFlags.String("1", "list1.out", "First list for comparison")
 	var listTwo = listCompareFlags.String("2", "list2.out", "Second list for comparison")
 
+	var makeDatasetFlags = flag.NewFlagSet("DATASET", flag.ExitOnError)
+	var keepListPath = makeDatasetFlags.String("kl", "keeplist.out", "Keep List file")
+	var goodwarePath = makeDatasetFlags.String("goodware", "goodware", "Path to goodware directory")
+	var malwarePath = makeDatasetFlags.String("malware", "malware", "Path to malware directory")
+	var datasetOutputPath = makeDatasetFlags.String("dataset", "dataset.csv", "Path for resulting dataset file")
+	var dsetThreads = makeDatasetFlags.Int("threads", runtime.NumCPU(), "Number of threads to use")
+
+	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags}
 	if len(os.Args) < 3 {
-		PrintUsage([]flag.FlagSet{*ngrammingFlags, *listCompareFlags})
+		PrintUsage(flagsArray)
 	}
 
 	start := time.Now()
@@ -47,8 +56,11 @@ func main() {
 	    case "LISTCOMPARE":
 	    	listCompareFlags.Parse(os.Args[2:])
 			KeepListCompare(*listOne, *listTwo)
+		case "DATASET":
+			makeDatasetFlags.Parse(os.Args[2:])
+			CreateDataset(*malwarePath, *goodwarePath, *keepListPath, *datasetOutputPath, *dsetThreads)
 		default:
-			PrintUsage([]flag.FlagSet{*ngrammingFlags, *listCompareFlags})
+			PrintUsage(flagsArray)
 	}
 	duration := time.Since(start)
 	fmt.Printf("Elapsed time: %s\n", duration)
