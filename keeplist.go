@@ -3,26 +3,23 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"github.com/aclements/go-rabin/rabin"
 )
 
-const MaxUint = ^uint32(0) -1
+const MaxUint = 2147483629 // Max Int - 18
+const Poly32  = 1101100001 // Degree 10 polynomial from https://www.partow.net/programming/polynomials/index.html
 
-// defining the array with MaxUint size causes compiler error
 type MaxIntArray []uint32
 
 func NewMaxIntArray() MaxIntArray {
 	var a MaxIntArray
-	/*var i uint32
-	for i = 0; i < MaxUint; i++ {
-		a = append(a, 0)
-	}*/
-	a = make([]uint32, 500000000)
+	a = make([]uint32, MaxUint)
 	return a
 }
 
@@ -60,7 +57,6 @@ func BasicNgramming(fileList []string, ngramSize int, ngrams *AtomicByteMap, loc
 		current := 0
 		for {
 			gram := content[current: current+ngramSize]
-			//fmt.Printf("%s: %s\n", filePath, gram)
 			ngrams.IncrementByte(gram)
 			current += 1
 			if current + ngramSize >= len(content) {
@@ -73,6 +69,8 @@ func BasicNgramming(fileList []string, ngramSize int, ngrams *AtomicByteMap, loc
 
 func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, skipGram uint32, lock *sync.Mutex, wg *sync.WaitGroup) {
 	for _, filePath := range fileList {
+		rabinTable := rabin.NewTable(Poly32, 1)
+		rabinHash := rabin.New(rabinTable)
 		content, err := ioutil.ReadFile(filePath)
 		if err != nil {
 			lock.Lock()
@@ -82,11 +80,10 @@ func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, ski
 		}
 		current := 0
 		for {
-			CastagnoliTable := crc32.MakeTable(crc32.Castagnoli)
 			gram := content[current: current+ngramSize]
-
+			rabinHash.Write(gram)
 			if binary.BigEndian.Uint32(gram) % skipGram == 0 {
-				gramIndex := crc32.Checksum(gram, CastagnoliTable)/100.0
+				gramIndex := uint32(rabinHash.Sum64())
 				lock.Lock()
 				(*hashArray)[gramIndex] += 1
 				lock.Unlock()
@@ -101,8 +98,10 @@ func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, ski
 	wg.Done()
 }
 
-func HashesToNgrams(fileList []string, hashArray *MaxIntArray, ngramSize int, lock *sync.Mutex, ngrams *AtomicByteMap, wg *sync.WaitGroup) {
+func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock *sync.Mutex, ngrams *AtomicByteMap, wg *sync.WaitGroup) {
 	for _, filePath := range fileList {
+		rabinTable := rabin.NewTable(Poly32, 1)
+		rabinHash := rabin.New(rabinTable)
 		content, err := ioutil.ReadFile(filePath)
 		if err != nil {
 			lock.Lock()
@@ -112,11 +111,14 @@ func HashesToNgrams(fileList []string, hashArray *MaxIntArray, ngramSize int, lo
 		}
 		current := 0
 		for {
-			CastagnoliTable := crc32.MakeTable(crc32.Castagnoli)
 			gram := content[current: current+ngramSize]
-			gramIndex := crc32.Checksum(gram, CastagnoliTable)/100.0
-			if (*hashArray)[gramIndex] > 1 {
-				ngrams.IncrementByte(gram)
+			rabinHash.Write(gram)
+			gramIndex := uint32(rabinHash.Sum64())
+			for i := 0; i < len(*hashArray); i++ {
+				if (*hashArray)[i] == gramIndex {
+					ngrams.IncrementByte(gram)
+					break
+				}
 			}
 
 			current += 1
@@ -169,7 +171,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 				return nil
 			})
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error walking the path %q: %v\n", input, err)
+				fmt.Fprintf(os.Stderr, "Error walking input path %s: %v\n", input, err)
 				return
 			}
 		} else {
@@ -233,11 +235,30 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 	fmt.Println("Sorting ngrams.")
 	var keepers [][]byte
 	if useHash {
+		// We were using the index to store the ngram hash, now save the hash as value in a new array, with the counts, to allow sorting
+		var indiciesToValuesArray [][]uint32
+		for index, value := range hashNgrams {
+			if value > uint32(numFiles/2.0) {
+				indiciesToValuesArray = append(indiciesToValuesArray, []uint32{uint32(index), value})
+			}
+		}
+
+		QuickSelect(UIntArraySlice32(indiciesToValuesArray), numGramsToKeep+2)
+		indiciesToValuesArray = indiciesToValuesArray[:int(math.Min(float64(numGramsToKeep+2), float64(len(indiciesToValuesArray))))]
+
+		var topValues []uint32
+		for _, val := range indiciesToValuesArray {
+			topValues = append(topValues, val[0])
+			//fmt.Printf("%d: %d\n", val[0], val[1])
+		}
+
+		runtime.GC() // Maybe we can garbage collect the old hashNgrams array
+
 		fmt.Println("Performing second run to get ngrams from hashes.")
 		if numPieces < 2 {
 			// Not enough files for threading
 			wg.Add(1)
-			HashesToNgrams(fileList, &hashNgrams, ngramSize, &lock, &regularNgrams, &wg)
+			HashesToNgrams(fileList, &topValues, ngramSize, &lock, &regularNgrams, &wg)
 		} else {
 			for i := 0; i < numPieces; i++ {
 				start := numPieces * i
@@ -250,7 +271,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 				}
 				thisSlice := fileList[start:end]
 				wg.Add(1)
-				go HashesToNgrams(thisSlice, &hashNgrams, ngramSize, &lock, &regularNgrams, &wg)
+				go HashesToNgrams(thisSlice, &topValues, ngramSize, &lock, &regularNgrams, &wg)
 			}
 		}
 		wg.Wait()
@@ -263,6 +284,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 	prev := sortedGrams[0].Value
 	sortIsBroken := false
 	for _, pair := range sortedGrams {
+		//fmt.Printf("%v: %d: %d\n", pair.Key, binary.BigEndian.Uint32(pair.Key), pair.Value)
 		keepers = append(keepers, pair.Key)
 		if pair.Value > prev {
 			sortIsBroken = true
@@ -324,6 +346,17 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 	err = binary.Write(file, binary.BigEndian, bytesTemp)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing number of ngrams to %s: %v\n", outputFile, err)
+	}
+
+	bytesTemp = make([]byte, 1)
+	bytesTemp[0] = 0x00
+	if useHash {
+		bytesTemp[0] = 0x01
+	}
+
+	err = binary.Write(file, binary.BigEndian, bytesTemp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing ngram method %s: %v\n", outputFile, err)
 	}
 
 	justOnce := false
