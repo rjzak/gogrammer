@@ -4,4 +4,4 @@ This application creates a list of byte ngrams from a collection of files. There
 
 This is very much a work-in-progress, don't use it as-is for anything important.
 
-The hash method seems to have about 60% of the resulting n-grams in comming with normal ngramming, which could be attributed to hash collisions. However, the hash method seems to run in about a quarter of the time.
+The hash method seems to have about 60% of the resulting n-grams in common with normal ngramming, which could be attributed to hash collisions. However, the hash method seems to run in about a quarter of the time.
