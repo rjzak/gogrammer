@@ -1,5 +1,9 @@
 *.out
 *.csv
 *.libsvm
+*.prof
+*.gif
+*.pdf
+*.svg
 ngrammer
 .idea/
