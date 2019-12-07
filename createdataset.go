@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -213,6 +214,12 @@ func CreateDataset(malwarePath string, goodwarePath string, keeplistPath string,
 		datasetFunc = CreateLibSVMDataset
 	} else {
 		fmt.Println("Generating CSV dataset.")
+		for _, gram := range kl.NGrams {
+			dst := make([]byte, hex.EncodedLen(len(gram)))
+			hex.Encode(dst, gram)
+			file.WriteString(string(dst)+",")
+		}
+		file.WriteString("Label\n")
 	}
 
 	if numPieces < 2 {
