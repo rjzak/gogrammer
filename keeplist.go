@@ -99,7 +99,7 @@ func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, ski
 	wg.Done()
 }
 
-func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock *sync.Mutex, ngrams *[][]byte, wg *sync.WaitGroup) {
+func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, topK int, lock *sync.Mutex, ngrams *[][]byte, wg *sync.WaitGroup) {
 	for _, filePath := range fileList {
 		rabinTable := rabin.NewTable(Poly32, 1)
 		rabinHash := rabin.New(rabinTable)
@@ -132,7 +132,7 @@ func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock 
 			}
 
 			current += 1
-			if current + ngramSize >= len(content) {
+			if current + ngramSize >= len(content) || len(*ngrams) >= topK {
 				break
 			}
 		}
@@ -268,7 +268,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 		if numPieces < 2 {
 			// Not enough files for threading
 			wg.Add(1)
-			HashesToNgrams(fileList, &topValues, ngramSize, &lock, &keepers, &wg)
+			HashesToNgrams(fileList, &topValues, ngramSize, numGramsToKeep, &lock, &keepers, &wg)
 		} else {
 			for i := 0; i < numPieces; i++ {
 				start := numPieces * i
@@ -281,7 +281,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 				}
 				thisSlice := fileList[start:end]
 				wg.Add(1)
-				go HashesToNgrams(thisSlice, &topValues, ngramSize, &lock, &keepers, &wg)
+				go HashesToNgrams(thisSlice, &topValues, ngramSize, numGramsToKeep, &lock, &keepers, &wg)
 			}
 		}
 		wg.Wait()
@@ -312,7 +312,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 		}
 	}
 
-	if len(keepers) != numGramsToKeep {
+	if len(keepers) < numGramsToKeep {
 		fmt.Fprintf(os.Stderr, "Only found %d unique ngrams despite the request for %d ngrams.\n", len(keepers), numGramsToKeep)
 	} else {
 		fmt.Printf("Saving the top %d %d-grams to %s.\n", numGramsToKeep, ngramSize, outputFile)
