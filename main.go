@@ -15,7 +15,7 @@ func PrintUsage(flags []flag.FlagSet) {
 	for _, fset := range flags {
 		fset.Usage()
 	}
-	fmt.Println("Usage of INFO: INFO <FilePath>")
+	fmt.Println("Usage of INFO: LISTINFO <FilePath>")
 	fmt.Printf("Go: %s\n", runtime.Version())
 	os.Exit(1)
 }

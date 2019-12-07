@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -31,10 +32,10 @@ func (a MaxIntArray) Less (i, j int) bool {
 	return a[i] < a[j]
 }
 
-func (a MaxIntArray) Swap(i, j int) {
-	temp := a[i]
-	a[i] = a[j]
-	a[j] = temp
+func (a *MaxIntArray) Swap(i, j int) {
+	temp := (*a)[i]
+	(*a)[i] = (*a)[j]
+	(*a)[j] = temp
 }
 
 func (a MaxIntArray) Top(x int) []uint32 {
@@ -98,7 +99,7 @@ func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, ski
 	wg.Done()
 }
 
-func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock *sync.Mutex, ngrams *AtomicByteMap, wg *sync.WaitGroup) {
+func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock *sync.Mutex, ngrams *[][]byte, wg *sync.WaitGroup) {
 	for _, filePath := range fileList {
 		rabinTable := rabin.NewTable(Poly32, 1)
 		rabinHash := rabin.New(rabinTable)
@@ -116,7 +117,16 @@ func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, lock 
 			gramIndex := uint32(rabinHash.Sum64())
 			for i := 0; i < len(*hashArray); i++ {
 				if (*hashArray)[i] == gramIndex {
-					ngrams.IncrementByte(gram)
+					haveSeen := false
+					for _, seengrams := range *ngrams {
+						if bytes.Compare(seengrams, gram) == 0 {
+							haveSeen = true
+							break
+						}
+					}
+					if !haveSeen {
+						*ngrams = append(*ngrams, gram)
+					}
 					break
 				}
 			}
@@ -258,7 +268,7 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 		if numPieces < 2 {
 			// Not enough files for threading
 			wg.Add(1)
-			HashesToNgrams(fileList, &topValues, ngramSize, &lock, &regularNgrams, &wg)
+			HashesToNgrams(fileList, &topValues, ngramSize, &lock, &keepers, &wg)
 		} else {
 			for i := 0; i < numPieces; i++ {
 				start := numPieces * i
@@ -271,33 +281,35 @@ func CreateKeeplist(filePaths []string, ngramSize int, numGramsToKeep int, outpu
 				}
 				thisSlice := fileList[start:end]
 				wg.Add(1)
-				go HashesToNgrams(thisSlice, &topValues, ngramSize, &lock, &regularNgrams, &wg)
+				go HashesToNgrams(thisSlice, &topValues, ngramSize, &lock, &keepers, &wg)
 			}
 		}
 		wg.Wait()
 	}
 
-	if regularNgrams.IsEmpty() {
-		fmt.Fprintf(os.Stderr, "Ngrams container empty, this won't end well.\n")
-	}
-	sortedGrams := regularNgrams.SortedValues()
-	prev := sortedGrams[0].Value
-	sortIsBroken := false
-	for _, pair := range sortedGrams {
-		//fmt.Printf("%v: %d: %d\n", pair.Key, binary.BigEndian.Uint32(pair.Key), pair.Value)
-		keepers = append(keepers, pair.Key)
-		if pair.Value > prev {
-			sortIsBroken = true
+	if !useHash {
+		if regularNgrams.IsEmpty() {
+			fmt.Fprintf(os.Stderr, "Ngrams container empty, this won't end well.\n")
 		}
-		if len(keepers) == numGramsToKeep {
-			break
+		sortedGrams := regularNgrams.SortedValues()
+		prev := sortedGrams[0].Value
+		sortIsBroken := false
+		for _, pair := range sortedGrams {
+			//fmt.Printf("%v: %d: %d\n", pair.Key, binary.BigEndian.Uint32(pair.Key), pair.Value)
+			keepers = append(keepers, pair.Key)
+			if pair.Value > prev {
+				sortIsBroken = true
+			}
+			if len(keepers) == numGramsToKeep {
+				break
+			}
 		}
-	}
-	regularNgrams.Erase()
-	runtime.GC()
+		regularNgrams.Erase()
+		runtime.GC()
 
-	if sortIsBroken {
-		fmt.Println("Sorting of ngram counts not working.");
+		if sortIsBroken {
+			fmt.Println("Sorting of ngram counts not working.");
+		}
 	}
 
 	if len(keepers) != numGramsToKeep {
