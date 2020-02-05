@@ -10,7 +10,7 @@ import (
 
 func PrintUsage(flags []flag.FlagSet) {
 	fmt.Fprintf(os.Stderr, "Usage: %s MODE ARGS\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE, DATASET\n")
+	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE, DATASET, CREATEBLOOM\n")
 	fmt.Fprintf(os.Stderr, "A simple tool for creating malware/goodware datasets from raw byte.\nhttps://github.com/rjzak/gogrammer/\n\n")
 	for _, fset := range flags {
 		fset.Usage()
@@ -41,7 +41,19 @@ func main() {
 	var datasetOutputPath = makeDatasetFlags.String("dataset", "dataset.csv", "Path for resulting dataset file")
 	var dsetThreads = makeDatasetFlags.Int("threads", runtime.NumCPU(), "Number of threads to use")
 
-	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags}
+	var createBloomsFlags = flag.NewFlagSet("BLOOMS", flag.ExitOnError)
+	var bloomsNgramsSize = createBloomsFlags.Int("size", 6, "Size of ngrams (value of N)")
+	var bloomsToKeep = createBloomsFlags.Int("keep", 1000, "Number of top ngrams to keep")
+	var bloomFalsePositive = createBloomsFlags.Float64("fp_rate", 0.001, "False positive rate for the bloom filter")
+	var bloomOutputFile = createBloomsFlags.String("output", "ngrams.bloom", "Output path for the bloom filter")
+
+	var bloomTestFlags = flag.NewFlagSet("TESTBLOOM", flag.ExitOnError)
+	var bloomTestInsertions = bloomTestFlags.Int("items", 1000, "Number of items to insert into the test bloom filter")
+	var bloomTestFalsePositive = bloomTestFlags.Float64("fp_rate", 0.001, "False positive rate for the bloom filter")
+	var bloomTestIterations = bloomTestFlags.Int("iter", 10, "Number of times to run the test")
+	var bloomTestOutput = bloomTestFlags.String("output", "bloom_test_file.bloom", "Output file to serialization test")
+
+	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *createBloomsFlags}
 	if len(os.Args) < 3 {
 		PrintUsage(flagsArray)
 	}
@@ -59,6 +71,12 @@ func main() {
 		case "DATASET":
 			makeDatasetFlags.Parse(os.Args[2:])
 			CreateDataset(*malwarePath, *goodwarePath, *keepListPath, *datasetOutputPath, *dsetThreads)
+		case "CREATEBLOOM":
+			createBloomsFlags.Parse(os.Args[2:])
+			CreateBloomFilters(*bloomsNgramsSize, *bloomsToKeep, *bloomFalsePositive, createBloomsFlags.Args(), *bloomOutputFile)
+		case "TESTBLOOM":
+			bloomTestFlags.Parse(os.Args[2:])
+			TestBloomFilter(*bloomTestInsertions, *bloomTestFalsePositive, *bloomTestIterations, *bloomTestOutput)
 		default:
 			PrintUsage(flagsArray)
 	}
