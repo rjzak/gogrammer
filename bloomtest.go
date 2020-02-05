@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func RandomString() string {
+func RandomString() string { // https://yourbasic.org/golang/generate-random-string/
 	digits := "0123456789"
 	specials := "~=+%^*/()[]{}/!@#$?|"
 	all := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
@@ -132,6 +132,20 @@ func TestBloomFilter(insertItems int, fpRate float64, iterations int, output str
 				} else {
 					fmt.Fprintf(os.Stderr, "Loaded bloom filter has a different amount of hash functions.\n")
 					error_count += 1
+				}
+				for _, notInserted := range notInsertedItems {
+					itemCount, err := newBloom.Get(notInserted)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Failed to retrieve non-inserted item %s from loaded bloom filter.\n", notInserted)
+						error_count += 1
+					} else {
+						if itemCount > 0 {
+							fmt.Fprintf(os.Stderr, "Loaded bloom filter reported that non-inserted item %s was present %d times.\n", notInserted, itemCount)
+							error_count += 1
+						} else {
+							success_count += 1
+						}
+					}
 				}
 			}
 		}

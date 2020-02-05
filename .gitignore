@@ -5,5 +5,7 @@
 *.gif
 *.pdf
 *.svg
+*.bloom
 ngrammer
+gogrammer
 .idea/
