@@ -10,7 +10,7 @@ import (
 
 func PrintUsage(flags []flag.FlagSet) {
 	fmt.Fprintf(os.Stderr, "Usage: %s MODE ARGS\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE, DATASET, CREATEBLOOM\n")
+	fmt.Fprintf(os.Stderr, "\tAvailable modes: NGRAM, LISTINFO, LISTCOMPARE, DATASET, CREATEBLOOM, TESTBLOOM\n")
 	fmt.Fprintf(os.Stderr, "A simple tool for creating malware/goodware datasets from raw byte.\nhttps://github.com/rjzak/gogrammer/\n\n")
 	for _, fset := range flags {
 		fset.Usage()
@@ -53,7 +53,7 @@ func main() {
 	var bloomTestIterations = bloomTestFlags.Int("iter", 10, "Number of times to run the test")
 	var bloomTestOutput = bloomTestFlags.String("output", "bloom_test_file.bloom", "Output file to serialization test")
 
-	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *createBloomsFlags}
+	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *createBloomsFlags, *bloomTestFlags}
 	if len(os.Args) < 3 {
 		PrintUsage(flagsArray)
 	}
