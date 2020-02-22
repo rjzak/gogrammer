@@ -179,10 +179,43 @@ func TrainModel(datasetPath string, modelOutput string, csvHasHeader bool, regul
 	model := linear_models.Train(dataset.GetProblem(), regressor)
 
 	accuracy := dataset.GetAccuracy(model) * 100.0
-	fmt.Printf("Training accuracy: %f%%\n", accuracy)
+	fmt.Printf("Training accuracy: %1.2f%%\n", accuracy)
 
 	err = linear_models.Export(model, modelOutput)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to save model to %s: %v.\n", modelOutput, err)
 	}
+}
+
+func EvaluateModel(datasetPath, modelPath string, csvHasHeader bool) {
+	if !exists(datasetPath) {
+		fmt.Fprintf(os.Stderr, "Dataset path %s does not exist.\n", datasetPath)
+		return
+	}
+
+	if !exists(modelPath) {
+		fmt.Fprintf(os.Stderr, "Model path %s does not exist.\n", modelPath)
+		return
+	}
+
+	dataset, err := ConvertDataset(datasetPath, csvHasHeader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse dataset: %v.\n", err)
+		return
+	}
+
+	if dataset == nil {
+		fmt.Fprintf(os.Stderr, "Dataset is nil.\n")
+		return
+	}
+
+	model := linear_models.Model{}
+	err = linear_models.Load(&model, modelPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading model: %v.\n", err)
+		return
+	}
+
+	accuracy := dataset.GetAccuracy(&model) * 100.0
+	fmt.Printf("Evaluation accuracy: %1.2f%%\n", accuracy)
 }

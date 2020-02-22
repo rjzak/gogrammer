@@ -49,6 +49,11 @@ func main() {
 	var trainLRC = trainModelFlags.Float64("C", 1.0, "C parameter for logistic regression, inverse of regularlisation strength")
 	var trainEps = trainModelFlags.Float64("EPS", 0.001, "Epsilon parameter for logistic regression")
 
+	var evalModelFlags = flag.NewFlagSet("EVAL", flag.ExitOnError)
+	var evalModelPath = evalModelFlags.String("model", "", "Path to the serialised model to evaluate")
+	var evalDatasetPath = evalModelFlags.String("dataset", "", "Dataset path")
+	var evalDatasetHasHeaders = evalModelFlags.Bool("hasFlags", false, "Does the CSV file have a header?")
+
 	var createBloomsFlags = flag.NewFlagSet("BLOOMS", flag.ExitOnError)
 	var bloomsNgramsSize = createBloomsFlags.Int("size", 6, "Size of ngrams (value of N)")
 	var bloomsToKeep = createBloomsFlags.Int("keep", 1000, "Number of top ngrams to keep")
@@ -61,7 +66,7 @@ func main() {
 	var bloomTestIterations = bloomTestFlags.Int("iter", 10, "Number of times to run the test")
 	var bloomTestOutput = bloomTestFlags.String("output", "bloom_test_file.bloom", "Output file to serialization test")
 
-	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *trainModelFlags, *createBloomsFlags, *bloomTestFlags}
+	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *trainModelFlags, *evalModelFlags, *createBloomsFlags, *bloomTestFlags}
 	if len(os.Args) < 3 {
 		PrintUsage(flagsArray)
 	}
@@ -82,6 +87,9 @@ func main() {
 		case "TRAIN":
 			trainModelFlags.Parse(os.Args[2:])
 			TrainModel(*trainDatasetPath, *trainModelOutput, *trainDatasetHasHeaders, *trainModelRegulariser, *trainLRC, *trainEps)
+		case "EVAL":
+			evalModelFlags.Parse(os.Args[2:])
+			EvaluateModel(*evalDatasetPath, *evalModelPath, *evalDatasetHasHeaders)
 		case "CREATEBLOOM":
 			createBloomsFlags.Parse(os.Args[2:])
 			CreateBloomFilters(*bloomsNgramsSize, *bloomsToKeep, *bloomFalsePositive, createBloomsFlags.Args(), *bloomOutputFile)
