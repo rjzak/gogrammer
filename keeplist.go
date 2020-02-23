@@ -118,6 +118,7 @@ func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, topK 
 			for i := 0; i < len(*hashArray); i++ {
 				if (*hashArray)[i] == gramIndex {
 					haveSeen := false
+					lock.Lock()
 					for _, seengrams := range *ngrams {
 						if bytes.Compare(seengrams, gram) == 0 {
 							haveSeen = true
@@ -127,6 +128,7 @@ func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, topK 
 					if !haveSeen {
 						*ngrams = append(*ngrams, gram)
 					}
+					lock.Unlock()
 					break
 				}
 			}
