@@ -6,6 +6,8 @@
 *.pdf
 *.svg
 *.bloom
+*.ser
+*.grams
 ngrammer
 gogrammer
 .idea/

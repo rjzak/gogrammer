@@ -80,6 +80,13 @@ func HashNgramming(fileList []string, ngramSize int, hashArray *MaxIntArray, ski
 			continue
 		}
 		current := 0
+		if current + ngramSize > len(content) {
+			lock.Lock()
+			fmt.Printf("%s is too small.\n", filePath)
+			lock.Unlock()
+			continue
+		}
+
 		for {
 			gram := content[current: current+ngramSize]
 			rabinHash.Write(gram)
@@ -111,6 +118,13 @@ func HashesToNgrams(fileList []string, hashArray *[]uint32, ngramSize int, topK 
 			continue
 		}
 		current := 0
+		if current + ngramSize > len(content) {
+			lock.Lock()
+			fmt.Printf("%s is too small.\n", filePath)
+			lock.Unlock()
+			continue
+		}
+
 		for {
 			gram := content[current: current+ngramSize]
 			rabinHash.Write(gram)
