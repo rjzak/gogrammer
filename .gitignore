@@ -8,6 +8,7 @@
 *.bloom
 *.ser
 *.grams
+*.model
 ngrammer
 gogrammer
 .idea/
