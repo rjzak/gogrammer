@@ -45,7 +45,7 @@ func main() {
 	var trainDatasetPath = trainModelFlags.String("dataset", "", "Dataset path")
 	var trainDatasetHasHeaders = trainModelFlags.Bool("hasFlags", false, "Does the CSV file have a header?")
 	var trainModelOutput = trainModelFlags.String("output", "", "Serialisation output for the trained model")
-	var trainModelRegulariser = trainModelFlags.String("reg", "l2", "Logistic Regression reulariser, l1 or l2")
+	var trainModelRegulariser = trainModelFlags.String("reg", "l2", "Logistic Regression reulariser, l1, l2, or l1l2")
 	var trainLRC = trainModelFlags.Float64("C", 1.0, "C parameter for logistic regression, inverse of regularlisation strength")
 	var trainEps = trainModelFlags.Float64("EPS", 0.001, "Epsilon parameter for logistic regression")
 
@@ -67,37 +67,37 @@ func main() {
 	var bloomTestOutput = bloomTestFlags.String("output", "bloom_test_file.bloom", "Output file to serialization test")
 
 	flagsArray := []flag.FlagSet{*ngrammingFlags, *listCompareFlags, *makeDatasetFlags, *trainModelFlags, *evalModelFlags, *createBloomsFlags, *bloomTestFlags}
-	if len(os.Args) < 3 {
+	if len(os.Args) < 2 {
 		PrintUsage(flagsArray)
 	}
 
 	start := time.Now()
 	switch os.Args[1] {
-		case "NGRAM":
-			ngrammingFlags.Parse(os.Args[2:])
-			CreateKeeplist(ngrammingFlags.Args(), *N, *toKeep, *outputFile, *threads, *useHash, *skipGram, *name)
-		case "LISTINFO":
-			ShowKeeplistInfo(os.Args[2])
-	    case "LISTCOMPARE":
-	    	listCompareFlags.Parse(os.Args[2:])
-			KeepListCompare(*listOne, *listTwo)
-		case "DATASET":
-			makeDatasetFlags.Parse(os.Args[2:])
-			CreateDataset(*malwarePath, *goodwarePath, *keepListPath, *datasetOutputPath, *dsetThreads)
-		case "TRAIN":
-			trainModelFlags.Parse(os.Args[2:])
-			TrainModel(*trainDatasetPath, *trainModelOutput, *trainDatasetHasHeaders, *trainModelRegulariser, *trainLRC, *trainEps)
-		case "EVAL":
-			evalModelFlags.Parse(os.Args[2:])
-			EvaluateModel(*evalDatasetPath, *evalModelPath, *evalDatasetHasHeaders)
-		case "CREATEBLOOM":
-			createBloomsFlags.Parse(os.Args[2:])
-			CreateBloomFilters(*bloomsNgramsSize, *bloomsToKeep, *bloomFalsePositive, createBloomsFlags.Args(), *bloomOutputFile)
-		case "TESTBLOOM":
-			bloomTestFlags.Parse(os.Args[2:])
-			TestBloomFilter(*bloomTestInsertions, *bloomTestFalsePositive, *bloomTestIterations, *bloomTestOutput)
-		default:
-			PrintUsage(flagsArray)
+	case "NGRAM":
+		ngrammingFlags.Parse(os.Args[2:])
+		CreateKeeplist(ngrammingFlags.Args(), *N, *toKeep, *outputFile, *threads, *useHash, *skipGram, *name)
+	case "LISTINFO":
+		ShowKeeplistInfo(os.Args[2])
+	case "LISTCOMPARE":
+		listCompareFlags.Parse(os.Args[2:])
+		KeepListCompare(*listOne, *listTwo)
+	case "DATASET":
+		makeDatasetFlags.Parse(os.Args[2:])
+		CreateDataset(*malwarePath, *goodwarePath, *keepListPath, *datasetOutputPath, *dsetThreads)
+	case "TRAIN":
+		trainModelFlags.Parse(os.Args[2:])
+		TrainModel(*trainDatasetPath, *trainModelOutput, *trainDatasetHasHeaders, *trainModelRegulariser, *trainLRC, *trainEps)
+	case "EVAL":
+		evalModelFlags.Parse(os.Args[2:])
+		EvaluateModel(*evalDatasetPath, *evalModelPath, *evalDatasetHasHeaders)
+	case "CREATEBLOOM":
+		createBloomsFlags.Parse(os.Args[2:])
+		CreateBloomFilters(*bloomsNgramsSize, *bloomsToKeep, *bloomFalsePositive, createBloomsFlags.Args(), *bloomOutputFile)
+	case "TESTBLOOM":
+		bloomTestFlags.Parse(os.Args[2:])
+		TestBloomFilter(*bloomTestInsertions, *bloomTestFalsePositive, *bloomTestIterations, *bloomTestOutput)
+	default:
+		PrintUsage(flagsArray)
 	}
 	duration := time.Since(start)
 	fmt.Printf("Elapsed time: %s\n", duration)

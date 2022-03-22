@@ -3,13 +3,14 @@ package main
 import (
 	"bufio"
 	"errors"
-	"os"
 	"fmt"
+	"github.com/sjwhitworth/golearn/linear_models"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"github.com/sjwhitworth/golearn/linear_models"
 )
 
 type dataset struct {
@@ -35,8 +36,10 @@ func (ds *dataset) GetAccuracy(model *linear_models.Model) float64 {
 func CreateRegressor(regulariser string, C, epsilon float64) *linear_models.Parameter {
 	defaultModelType := linear_models.L2R_LR
 	switch regulariser {
-		case "l1": defaultModelType = linear_models.L1R_LR
-		case "l1l2": defaultModelType = linear_models.L2R_LR_DUAL
+	case "l1":
+		defaultModelType = linear_models.L1R_LR
+	case "l1l2":
+		defaultModelType = linear_models.L2R_LR_DUAL
 	}
 	return linear_models.NewParameter(defaultModelType, C, epsilon)
 }
@@ -54,13 +57,17 @@ func ConvertDataset(datasetPath string, hasHeader bool) (*dataset, error) {
 	}
 	defer dsFile.Close()
 
-	scanner := bufio.NewScanner(dsFile)
+	dsReader := bufio.NewReader(dsFile)
 
 	if ext == ".csv" {
 		lineLength := -1
 		first := true
-		for scanner.Scan() {
-			lineParts := strings.Split(scanner.Text(), ",")
+		for {
+			line, err := dsReader.ReadString('\n')
+			if err == io.EOF {
+				break
+			}
+			lineParts := strings.Split(strings.TrimSpace(line), ",")
 			if hasHeader && first {
 				first = false
 				continue
@@ -77,16 +84,21 @@ func ConvertDataset(datasetPath string, hasHeader bool) (*dataset, error) {
 			for index, item := range lineParts[:len(lineParts)-2] {
 				dataPoint, err := strconv.ParseFloat(item, 64)
 				if err != nil {
-					return nil, errors.New(fmt.Sprintf("Encountered non-float item: ", item))
+					return nil, errors.New(fmt.Sprintf("Encountered non-float item: %v\n", item))
 				}
 				thisLine[index] = dataPoint
 			}
-
-			labelPoint, err := strconv.ParseFloat(lineParts[len(lineParts)-1], 64)
-			if err != nil {
-				return nil, errors.New(fmt.Sprintf("Encountered non-float label: ", lineParts[len(lineParts)-1]))
+			if len(thisLine) == 0 {
+				_, _ = fmt.Fprintf(os.Stderr, "Warning, encountered empty line parsing %s as CSV\n", datasetPath)
+				continue
 			}
-			Y = append(Y, labelPoint)
+			X = append(X, thisLine)
+
+			labelPoint, err := strconv.ParseInt(lineParts[len(lineParts)-1], 10, 32)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("Encountered non-int label: %s", lineParts[len(lineParts)-1]))
+			}
+			Y = append(Y, float64(labelPoint))
 		}
 	} else {
 		if ext == ".libsvm" {
@@ -95,8 +107,11 @@ func ConvertDataset(datasetPath string, hasHeader bool) (*dataset, error) {
 				return nil, err
 			}
 			lastInt := int64(-1)
-			for scanner.Scan() {
-				thisLine := scanner.Text()
+			for {
+				thisLine, err := dsReader.ReadString('\n')
+				if err == io.EOF {
+					break
+				}
 				labelFinder := labelIndexMatch.FindAllString(thisLine, len(thisLine))
 				last := strings.Replace(labelFinder[len(labelFinder)-1], ":", "", 1)
 				potentialLastInt, err := strconv.ParseInt(last, 10, 64)
@@ -110,11 +125,14 @@ func ConvertDataset(datasetPath string, hasHeader bool) (*dataset, error) {
 			}
 			//fmt.Printf("Found: %d\n", lastInt)
 
-			dsFile.Seek(0, 0) // Rewind
-			scanner = bufio.NewScanner(dsFile)
+			_, _ = dsFile.Seek(0, 0) // Rewind
+			dsReader = bufio.NewReader(dsFile)
 			intPairsMatch, err := regexp.Compile(`(\d+):(\d+)`)
-			for scanner.Scan() { // Iterate over the file again now that we know the amount of data points
-				thisLine := scanner.Text()
+			for { // Iterate over the file again now that we know the amount of data points
+				thisLine, err := dsReader.ReadString('\n')
+				if err == io.EOF {
+					break
+				}
 				pairFinder := intPairsMatch.FindAllString(thisLine, len(thisLine))
 				labelThisRow := strings.Split(thisLine, ":")[0]
 				labelIntThisRow, err := strconv.ParseFloat(labelThisRow, 64)
@@ -159,18 +177,28 @@ func ConvertDataset(datasetPath string, hasHeader bool) (*dataset, error) {
 
 func TrainModel(datasetPath string, modelOutput string, csvHasHeader bool, regulariser string, C float64, epsilon float64) {
 	if !exists(datasetPath) {
-		fmt.Fprintf(os.Stderr, "Dataset path %s does not exist.\n", datasetPath)
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset path %s does not exist.\n", datasetPath)
 		return
 	}
 
 	dataset, err := ConvertDataset(datasetPath, csvHasHeader)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse dataset: %v.\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Failed to parse dataset: %v\n", err)
 		return
 	}
 
 	if dataset == nil {
-		fmt.Fprintf(os.Stderr, "Dataset is nil.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset is nil.\n")
+		return
+	}
+
+	if len(dataset.X) == 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset has no data!\n")
+		return
+	}
+
+	if len(dataset.Y) == 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset has no targets!\n")
 		return
 	}
 
@@ -183,36 +211,46 @@ func TrainModel(datasetPath string, modelOutput string, csvHasHeader bool, regul
 
 	err = linear_models.Export(model, modelOutput)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to save model to %s: %v.\n", modelOutput, err)
+		_, _ = fmt.Fprintf(os.Stderr, "Failed to save model to %s: %v.\n", modelOutput, err)
 	}
 }
 
 func EvaluateModel(datasetPath, modelPath string, csvHasHeader bool) {
 	if !exists(datasetPath) {
-		fmt.Fprintf(os.Stderr, "Dataset path %s does not exist.\n", datasetPath)
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset path %s does not exist.\n", datasetPath)
 		return
 	}
 
 	if !exists(modelPath) {
-		fmt.Fprintf(os.Stderr, "Model path %s does not exist.\n", modelPath)
+		_, _ = fmt.Fprintf(os.Stderr, "Model path %s does not exist.\n", modelPath)
 		return
 	}
 
 	dataset, err := ConvertDataset(datasetPath, csvHasHeader)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse dataset: %v.\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Failed to parse dataset: %v.\n", err)
 		return
 	}
 
 	if dataset == nil {
-		fmt.Fprintf(os.Stderr, "Dataset is nil.\n")
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset is nil.\n")
+		return
+	}
+
+	if len(dataset.X) == 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset has no data!\n")
+		return
+	}
+
+	if len(dataset.Y) == 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "Dataset has no targets!\n")
 		return
 	}
 
 	model := linear_models.Model{}
 	err = linear_models.Load(&model, modelPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading model: %v.\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error loading model: %v.\n", err)
 		return
 	}
 

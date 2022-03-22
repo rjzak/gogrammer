@@ -29,6 +29,7 @@ func TestBloomFilter(insertItems int, fpRate float64, iterations int, output str
 	bloom_slots, bloom_hashes := CalcSlotsHashes(insertItems, fpRate)
 	error_count := 0
 	success_count := 0
+	fmt.Printf("Slots: %d, Hashes: %d\n", bloom_slots, bloom_hashes)
 
 	for iteration := 0; iteration < iterations; iteration++ {
 		fmt.Printf("Iteration %d\n", iteration+1)
@@ -121,7 +122,7 @@ func TestBloomFilter(insertItems int, fpRate float64, iterations int, output str
 				}
 				if len(newBloom.HashSeeds) == len(bloom.HashSeeds) {
 					success_count += 1
-					for  hashIndex := 0; hashIndex < len(bloom.HashSeeds); hashIndex++ {
+					for hashIndex := 0; hashIndex < len(bloom.HashSeeds); hashIndex++ {
 						if newBloom.HashSeeds[hashIndex] == bloom.HashSeeds[hashIndex] {
 							success_count += 1
 						} else {
@@ -151,7 +152,7 @@ func TestBloomFilter(insertItems int, fpRate float64, iterations int, output str
 		}
 	}
 
-	percentage := 100.0 * (float64(success_count) / float64(error_count + success_count))
+	percentage := 100.0 * (float64(success_count) / float64(error_count+success_count))
 	fmt.Printf("Success rate: %1.2f%%\n", percentage)
 	fmt.Printf("Total errors: %d\n", error_count)
 	fmt.Printf("Total successes: %d\n", success_count)
